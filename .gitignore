@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+dist/
+.env
+data/
+*.db
+*.tsbuildinfo
+build/
+release/
+.ruff_cache/
+
+# Local desktop packages, protected keys and runtime logs
+*.exe
+*.legacy
+*.dpapi
+*.log
+AutoMiner.sha256.txt
+.env.*
+!.env.example

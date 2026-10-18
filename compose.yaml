@@ -1,0 +1,83 @@
+x-service: &service
+  build: .
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  environment: &env
+    DATABASE_URL: postgresql+psycopg://autominer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db/autominer
+    APP_TOKEN: ${APP_TOKEN:?set APP_TOKEN}
+    INTERNAL_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+    EXECUTION_GATEWAY_URL: http://gateway:8000
+    MODEL_GATEWAY_URL: http://model:8000
+    MODEL_CLOUD_BASE_URLS: ${MODEL_CLOUD_BASE_URLS:-}
+    MODEL_LOCAL_BASE_URLS: ${MODEL_LOCAL_BASE_URLS:-}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: autominer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: autominer
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [control]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U autominer]
+      interval: 3s
+      retries: 20
+  api:
+    <<: *service
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [control]
+    depends_on:
+      db: {condition: service_healthy}
+  gateway:
+    <<: *service
+    environment:
+      <<: *env
+      SERVICE_ROLE: gateway
+    networks: [control, execution, scan, internet]
+    depends_on:
+      api: {condition: service_started}
+  model:
+    <<: *service
+    environment:
+      <<: *env
+      SERVICE_ROLE: model
+      MODEL_MAX_USD_PER_MILLION_TOKENS: ${MODEL_MAX_USD_PER_MILLION_TOKENS:-0}
+    networks: [control, internet]
+    depends_on:
+      api: {condition: service_started}
+  worker:
+    <<: *service
+    environment:
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?set INTERNAL_TOKEN}
+      EXECUTION_GATEWAY_URL: http://gateway:8000
+    command: [python, -m, app.worker]
+    networks: [execution]
+    depends_on: [gateway]
+  demo:
+    build:
+      context: .
+      dockerfile: demo/Dockerfile
+    profiles: [demo]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      scan: {ipv4_address: 172.30.10.10}
+
+networks:
+  control: {internal: true}
+  execution: {internal: true}
+  scan:
+    internal: true
+    ipam:
+      config: [{subnet: 172.30.10.0/24}]
+  internet: {}
+volumes:
+  database: {}

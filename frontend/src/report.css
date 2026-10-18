@@ -1,0 +1,9 @@
+.report-view-switch { margin: 24px 0; gap: 10px; }
+.readable-report h3 { margin-top: 28px; }
+.report-conclusion { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-soft); }
+.report-conclusion h2 { line-height: 1.5; }
+.report-explanation { margin-block: 14px; padding: 18px 22px; border: 1px solid var(--line); border-radius: 14px; }
+.report-explanation summary { cursor: pointer; padding-block: 6px; min-height: 44px; line-height: 1.8; font-weight: 600; }
+.report-explanation p { line-height: 1.9; }
+.report-explanation dd { margin: 8px 0 20px; line-height: 1.8; }
+@media (max-width: 640px) { .report-conclusion, .report-explanation { padding: 16px; } }
