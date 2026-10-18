@@ -3,6 +3,7 @@ import DiscoveryManager from "./DiscoveryManager";
 import AccountManager from "./AccountManager";
 
 const passiveModes = ["injection_errors", "xss_passive", "csrf_passive", "ssrf_passive", "xxe_passive", "file_passive", "deserialization_passive", "auth_session_passive", "disclosure_passive", "configuration_passive", "crypto_passive", "supply_chain_passive", "business_logic_review", "other_web_passive", "race_condition_review", "memory_safety_passive", "dos_passive"];
+const inputModes = ["sql_error_verify", "xss_reflection_verify", "redirect_verify"];
 
 type Props = {
   target: any;
@@ -300,8 +301,9 @@ export default function EndpointWorkspace({
                         selected.map((e) => [e.id, testMode]),
                       ),
                       account_ids: testMode === "access_verify" ? [allowedIdentity, deniedIdentity].filter(Boolean)
-                        : testMode === "cors_verify" ? [] : useAccounts ? accounts.map((a) => a.id) : [],
+                        : testMode === "cors_verify" || inputModes.includes(testMode) ? [] : useAccounts ? accounts.map((a) => a.id) : [],
                       verification_rules: verificationRules,
+                      input_probe_rules: inputModes.includes(testMode) ? Object.fromEntries(selected.map(e => [e.id, { parameter: String(d.get("input_parameter") || ""), read_only_confirmed: d.get("input_readonly") === "on", synthetic_data_only: d.get("input_synthetic") === "on" }])) : {},
                       request_budget: Number(d.get("budget")),
                       duration_seconds: Number(d.get("duration")),
                     });
@@ -318,11 +320,14 @@ export default function EndpointWorkspace({
                         setTestMode(e.target.value);
                         if (e.target.value === "role_compare")
                           setUseAccounts(true);
-                        if (passiveModes.includes(e.target.value) || ["cors_verify", "access_verify"].includes(e.target.value))
+                        if (passiveModes.includes(e.target.value) || ["cors_verify", "access_verify", ...inputModes].includes(e.target.value))
                           setUseAccounts(false);
                       }}
                     >
                       <option value="cors_verify">CORS 行为验证（主动 · 固定 3 次 GET）</option>
+                      <option value="sql_error_verify">SQL 错误差异（主动 · 每接口 3 次 GET）</option>
+                      <option value="xss_reflection_verify">XSS 输入反射／HTML 上下文（主动 · 每接口 3 次 GET）</option>
+                      <option value="redirect_verify">开放重定向对照（主动 · 每接口 3 次 GET）</option>
                       <option value="access_verify" disabled={!accounts.length || selected.length !== 1}>权限规则验证（主动 · 单接口 2 次 GET）</option>
                       <option value="both">响应检查 + 身份响应对比</option>
                       <option value="baseline">响应安全配置与敏感标记</option>
@@ -352,6 +357,15 @@ export default function EndpointWorkspace({
                   </label>
                 </div>
                 {testMode === "cors_verify" && <p className="muted">固定发送一次匿名基线请求与两次携带固定 Origin 标记的匿名 GET，只访问所选接口；不向其他地址发请求。不执行浏览器脚本，行为复现仍需人工判断实际影响。</p>}
+                {inputModes.includes(testMode) && <fieldset className="inset-panel"><legend>固定输入对照配置</legend>
+                  <p>前控制、固定探针、后控制，共 3 次匿名 GET。只向当前接口添加一个参数，不允许已有查询参数的接口，不修改主机、端口或路径。</p>
+                  <label>只读测试参数名<input name="input_parameter" required pattern="[A-Za-z][A-Za-z0-9_]{0,63}" maxLength={64} placeholder={testMode === "redirect_verify" ? "例如：next" : "例如：q"} /></label>
+                  {testMode === "sql_error_verify" && <p className="muted">使用随机合成标记与一个固定单引号进行错误对照。不查询数据、不做盲注；错误差异不能直接证明 SQL 注入可利用。</p>}
+                  {testMode === "xss_reflection_verify" && <p className="muted">探针是无脚本、无事件处理器的自定义 HTML 标签。检查编码与反射上下文，不执行 JavaScript，不验证存储型或 DOM XSS。</p>}
+                  {testMode === "redirect_verify" && <p className="muted">使用随机 .invalid 地址对照 Location；执行器不会跟随跳转，也不会解析或访问标记域名。</p>}
+                  <label className="check"><input type="checkbox" name="input_readonly" required />我确认所选接口及参数为只读，不触发业务写入</label>
+                  <label className="check"><input type="checkbox" name="input_synthetic" required />只使用专用测试环境和合成测试数据</label>
+                </fieldset>}
                 {testMode === "access_verify" && <fieldset className="inset-panel">
                   <legend>单接口权限规则与合成数据</legend>
                   <p className="muted">仅比较两个身份对当前接口的 GET 响应，不修改资源编号。预期字符串仅在本机转为 SHA-256 摘要后提交，不保存原值。请使用专用账号与合成数据。</p>
@@ -413,7 +427,7 @@ export default function EndpointWorkspace({
                 </label>
                 <p className="muted">
                   计划最多{" "}
-                  {selected.length * (testMode === "cors_verify" ? 3 : testMode === "access_verify" ? 2 : 1 + (useAccounts && ["both", "role_compare"].includes(testMode) ? accounts.length : 0))}{" "}
+                  {selected.length * (testMode === "cors_verify" || inputModes.includes(testMode) ? 3 : testMode === "access_verify" ? 2 : 1 + (useAccounts && ["both", "role_compare"].includes(testMode) ? accounts.length : 0))}{" "}
                   次请求；达到预算会停止。不会自动扩大预算。
                 </p>
                 <button

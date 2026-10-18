@@ -177,13 +177,21 @@ def reserve_request(job_id, endpoint_id, account_id=None):
         return target, endpoint, headers, ev
 
 
-def execute(job_id, endpoint_id, account_id=None, *, probe_label=None):
+def execute(job_id, endpoint_id, account_id=None, *, probe_label=None, input_probe=None):
+    if input_probe is not None:
+        if account_id is not None or probe_label is not None:
+            raise Denied("输入探针只能用于匿名固定对照")
+        from .input_verification import prepare
+        probe_url, input_mode, nonce, expected_redirect = prepare(job_id, endpoint_id, input_probe)
     if probe_label is not None:
         with Session() as s:
             mode = get(s, job_id, "job").get("endpoint_test_types", {}).get(endpoint_id)
         if mode != "cors_verify" or account_id is not None or probe_label not in ("baseline", "probe_a", "probe_b"):
             raise Denied("固定 Origin 探针仅用于匿名 CORS 验证")
     target, endpoint, headers, ev = reserve_request(job_id, endpoint_id, account_id)
+    if input_probe is not None:
+        endpoint = dict(endpoint, url=probe_url)
+        ev.update(url=redact(probe_url), probe_label=input_probe)
     if probe_label is not None:
         ev["probe_label"] = probe_label
     try:
@@ -206,7 +214,12 @@ def execute(job_id, endpoint_id, account_id=None, *, probe_label=None):
                 audit(s, "request_dispatched", ev["id"])
 
         kwargs = {"probe_label": probe_label} if probe_label is not None else {}
+        if input_probe is not None and expected_redirect:
+            kwargs["expected_redirect"] = expected_redirect
         result = request(target, endpoint["url"], headers, before_send=authorize_dispatch, **kwargs)
+        if input_probe is not None:
+            from .input_verification import observe
+            ev["input_observation"] = observe(input_mode, nonce, result)
         if ev["test_mode"] == "access_verify":
             from .active_verification import marker_matches
             with Session() as s:
@@ -334,7 +347,7 @@ def execute(job_id, endpoint_id, account_id=None, *, probe_label=None):
             checks = injection_checks
         elif ev["test_mode"] in PASSIVE_CHECKS:
             checks = passive_checks
-        elif ev["test_mode"] in ("cors_verify", "access_verify"):
+        elif ev["test_mode"] in ("cors_verify", "access_verify", "sql_error_verify", "xss_reflection_verify", "redirect_verify"):
             signals = []
             checks = [{"id": ev["test_mode"], "name": "固定 HTTP 对照取证", "status": "observed", "detail": "单条响应不作漏洞判断，参见任务的聚合验证结论。"}]
         else:
@@ -444,6 +457,10 @@ def process_job(job_id):
     try:
         for endpoint in job["endpoint_ids"]:
             mode = job.get("endpoint_test_types", {}).get(endpoint, "both")
+            if mode in ("sql_error_verify", "xss_reflection_verify", "redirect_verify"):
+                from .input_verification import run
+                run(job_id, endpoint, mode)
+                continue
             if mode in ("cors_verify", "access_verify"):
                 from .active_verification import run_verification
                 run_verification(job_id, endpoint, mode)

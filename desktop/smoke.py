@@ -3,6 +3,7 @@
 import json
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
@@ -17,6 +18,22 @@ def check(runtime):
             pass
 
         def do_GET(self):
+            path = urlsplit(self.path).path
+            if path in ("/fixture/sql-input", "/fixture/html-input", "/fixture/redirect-input"):
+                counts["test"] += 1
+                value = parse_qs(urlsplit(self.path).query).get("q", [""])[0]
+                status, location, body = 200, None, value
+                if path == "/fixture/sql-input" and "'" in value:
+                    status, body = 500, "SQLSTATE[42000]: synthetic SQL parser failure"
+                if path == "/fixture/redirect-input" and value.startswith("https://autominer-"):
+                    status, location = 302, value
+                self.send_response(status)
+                self.send_header("Content-Type", "text/html")
+                if location:
+                    self.send_header("Location", location)
+                self.end_headers()
+                self.wfile.write(body.encode())
+                return
             if self.path == "/.well-known/autominer-verification.txt":
                 counts["proof"] += 1
                 body = challenge["value"].encode()
@@ -72,7 +89,7 @@ def check(runtime):
                     "bound_ips": [],
                     "statement": "Owned disposable synthetic desktop fixture",
                     "expires_at": time.time() + 300,
-                    "request_budget": 5,
+                    "request_budget": 20,
                     "ownership_declared": True,
                 },
             )
@@ -160,6 +177,23 @@ def check(runtime):
                 == 200
             )
             assert counts == {"proof": 2, "test": 3}, str(counts)
+            probe_modes = [("sql_error_verify", "/fixture/sql-input"), ("xss_reflection_verify", "/fixture/html-input"), ("redirect_verify", "/fixture/redirect-input")]
+            for mode, path in probe_modes:
+                imported_probe = client.post(f"/api/targets/{target['id']}/imports", json={"format": "manual", "document": {"requests": [{"url": root + path}]}}).json()["imported"][0]
+                response = client.post("/api/jobs", json={"target_id": target["id"], "endpoint_ids": [imported_probe["id"]], "endpoint_test_types": {imported_probe["id"]: mode},
+                    "input_probe_rules": {imported_probe["id"]: {"parameter": "q", "read_only_confirmed": True, "synthetic_data_only": True}}, "request_budget": 3})
+                assert response.status_code == 200, response.text
+                probe_id = response.json()["id"]
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    probe_detail = client.get(f"/api/jobs/{probe_id}").json()
+                    if probe_detail["job"]["status"] not in ("queued", "running"):
+                        break
+                    time.sleep(0.2)
+                assert probe_detail["job"]["status"] == "completed", json.dumps(probe_detail)
+                assert probe_detail["verifications"][0]["status"] == "behavior_confirmed"
+                assert probe_detail["coverage"]["sent_requests"] == 3
+            assert counts == {"proof": 2, "test": 12}, "输入对照应恰好增加 9 次请求，不得跟随跳转"
             assert (
                 client.post(f"/api/targets/{target['id']}/revoke", json={}).status_code
                 == 200
@@ -212,7 +246,7 @@ def check(runtime):
             draft.update(vendor="Synthetic vendor", subtype="弱口令")
             assert client.put(f"/api/findings/{finding_id}/submission-draft", json=draft).status_code == 200
             assert "平台提交草稿" in client.get(f"/api/findings/{finding_id}/submission-export?format=html").text
-            assert counts == {"proof": 2, "test": 3}, "离线功能不得发出目标请求"
+            assert counts == {"proof": 2, "test": 12}, "离线功能不得发出目标请求"
             return {
                 "ok": True,
                 "roles": ["api", "gateway", "model", "worker"],
@@ -228,6 +262,7 @@ def check(runtime):
                 "http_evidence": True,
                 "offline_review": True,
                 "submission_draft": True,
+                "input_comparisons": True,
             }
     finally:
         server.shutdown()
@@ -247,10 +282,10 @@ def check_persistence(runtime):
         trust_env=False,
     ) as client:
         state = client.get("/api/state").json()
-        assert len(state["target"]) == 1 and len(state["job"]) == 2
+        assert len(state["target"]) == 1 and len(state["job"]) == 5
         assert len(state["model"]) == 1 and state["model"][0]["has_api_key"]
         assert "encrypted_key" not in state["model"][0]
-        online_job = next(j for j in state["job"] if not j.get("offline_review"))
+        online_job = next(j for j in state["job"] if not j.get("offline_review") and not j.get("endpoint_test_types"))
         saved_detail = client.get(f"/api/jobs/{online_job['id']}").json()
         assert any(
             "synthetic-only"

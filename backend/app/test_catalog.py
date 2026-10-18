@@ -3,8 +3,8 @@
 from copy import deepcopy
 
 _CATEGORIES = [
-    ("injection", "注入漏洞", "仅被动匹配 SQL、模板和命令解析错误；不验证注入", "partial"),
-    ("xss", "XSS 跨站脚本", "仅静态来源与危险操作线索，不执行脚本或验证可利用性", "partial"),
+    ("injection", "注入漏洞", "被动错误线索及固定引号的 SQL 错误差异对照；不读取数据或验证盲注", "partial"),
+    ("xss", "XSS 跨站脚本", "静态线索及惰性 HTML 标记的反射上下文对照，不执行脚本", "partial"),
     ("csrf", "CSRF 跨站请求伪造", "仅分析表单及 Cookie 防护线索，不验证服务端校验", "partial"),
     ("ssrf", "SSRF 服务端请求伪造", "仅分析已有响应中的请求错误与输入线索，不发送探测地址", "partial"),
     ("xxe", "XXE 外部实体注入", "仅分析外部实体解析异常与声明线索，不解析实体", "partial"),
@@ -34,6 +34,9 @@ _CATEGORIES = [
 ]
 
 _TEMPLATES = [
+    {"id": "sql_error_verify", "title": "SQL 错误差异对照（主动只读）", "description": "用户指定 GET 参数，前后控制与单引号探针共 3 次匿名请求；只确认错误差异。", "category_ids": ["injection"]},
+    {"id": "xss_reflection_verify", "title": "HTML 输入反射对照（主动只读）", "description": "惰性自定义标签与两次控制，共 3 次匿名 GET；不执行脚本，不判定 XSS 可利用。", "category_ids": ["xss"]},
+    {"id": "redirect_verify", "title": "开放重定向对照（主动只读）", "description": "固定 .invalid 标记与两次控制，共 3 次匿名 GET；不跟随跳转。", "category_ids": ["other_web"]},
     {"id": "cors_verify", "title": "CORS 来源对照验证（主动只读）",
      "description": "同一授权接口进行基线与两个固定 Origin 的三次匿名 GET 对照；确认配置行为，敏感数据影响仍需人工确认。",
      "category_ids": ["other_web", "configuration"]},
@@ -134,13 +137,14 @@ _TEMPLATES = [
 
 def catalog():
     """Return an independent snapshot; planned categories have no executable tests."""
+    active = ("cors_verify", "access_verify", "sql_error_verify", "xss_reflection_verify", "redirect_verify")
     return {
         "categories": [
             {"id": ident, "name": name, "description": description, "status": status}
             for ident, name, description, status in _CATEGORIES
         ],
         "templates": [dict(deepcopy(t),
-            execution="active_verification" if t["id"] in ("cors_verify", "access_verify") else "comparison" if t["id"] in ("role_compare", "both") else "passive",
-            requests_per_endpoint=3 if t["id"] == "cors_verify" else 2 if t["id"] == "access_verify" else None if t["id"] in ("role_compare", "both") else 1,
-            risk="low" if t["id"] in ("cors_verify", "access_verify") else "read_only") for t in _TEMPLATES],
+            requests_per_endpoint=2 if t["id"] == "access_verify" else 3 if t["id"] in active else None if t["id"] in ("role_compare", "both") else 1,
+            execution="active_verification" if t["id"] in active else "comparison" if t["id"] in ("role_compare", "both") else "passive",
+            risk="low" if t["id"] in active else "read_only") for t in _TEMPLATES],
     }

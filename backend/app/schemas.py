@@ -57,16 +57,24 @@ class AccessVerificationRule(BaseModel):
     expected_value_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
+class InputProbeRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    parameter: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+    read_only_confirmed: Literal[True]
+    synthetic_data_only: Literal[True]
+
+
 class JobInput(BaseModel):
     target_id: str
     endpoint_ids: list[str] = Field(min_length=1, max_length=50)
     account_ids: list[str] = Field(default_factory=list, max_length=3)
     request_budget: int = Field(default=20, ge=1, le=500)
     duration_seconds: int = Field(default=120, ge=10, le=1800)
-    endpoint_test_types: dict[str, Literal["baseline", "role_compare", "both", "injection_errors", "xss_passive", "csrf_passive", "ssrf_passive", "xxe_passive", "file_passive", "deserialization_passive", "auth_session_passive", "disclosure_passive", "configuration_passive", "crypto_passive", "supply_chain_passive", "business_logic_review", "other_web_passive", "race_condition_review", "memory_safety_passive", "dos_passive", "cors_verify", "access_verify"]] = Field(
+    endpoint_test_types: dict[str, Literal["baseline", "role_compare", "both", "injection_errors", "xss_passive", "csrf_passive", "ssrf_passive", "xxe_passive", "file_passive", "deserialization_passive", "auth_session_passive", "disclosure_passive", "configuration_passive", "crypto_passive", "supply_chain_passive", "business_logic_review", "other_web_passive", "race_condition_review", "memory_safety_passive", "dos_passive", "cors_verify", "access_verify", "sql_error_verify", "xss_reflection_verify", "redirect_verify"]] = Field(
         default_factory=dict
     )
     verification_rules: dict[str, AccessVerificationRule] = Field(default_factory=dict, max_length=50)
+    input_probe_rules: dict[str, InputProbeRule] = Field(default_factory=dict, max_length=50)
 
 
 class PlanRun(BaseModel):

@@ -176,7 +176,9 @@ class LoopbackHTTP(http.client.HTTPConnection):
         raise last or ConnectionError("本机应用不可达")
 
 
-def request(target, url, headers=None, before_send=None, *, probe_label=None):
+def request(target, url, headers=None, before_send=None, *, probe_label=None, expected_redirect=None):
+    if expected_redirect is not None and not re.fullmatch(r"https://autominer-[a-f0-9]{32}\.invalid/", expected_redirect):
+        raise Denied("重定向对照只能使用固定无效域名标记")
     origins = {"baseline": None, "probe_a": "https://autominer-a.invalid", "probe_b": "https://autominer-b.invalid"}
     if probe_label is not None and probe_label not in origins:
         raise Denied("不允许的固定验证探针")
@@ -238,8 +240,12 @@ def request(target, url, headers=None, before_send=None, *, probe_label=None):
             "truncated": len(body) > 65536,
             "address": address,
         }
-        # Redirects are never followed. Record only an in-scope location.
+        # Never follow redirects. Retain only scoped locations or our inert marker.
         location = response.getheader("Location")
+        locations = [v for k, v in response.getheaders() if k.lower() == "location"]
+        marker_match = bool(expected_redirect and len(locations) == 1 and locations[0] == expected_redirect)
+        if expected_redirect:
+            result["redirect_probe_match"] = marker_match
         if location:
             try:
                 check_url(target, urljoin(url, location))
@@ -247,7 +253,7 @@ def request(target, url, headers=None, before_send=None, *, probe_label=None):
                 result["headers"] = {
                     k: v
                     for k, v in result["headers"].items()
-                    if k.lower() != "location"
+                    if k.lower() != "location" or marker_match
                 }
                 result["redirect_blocked"] = True
         return result

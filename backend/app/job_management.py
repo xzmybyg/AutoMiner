@@ -63,6 +63,7 @@ def job_detail(job_id: str):
             "role",
             "account_id",
             "probe_label",
+            "input_observation",
             "verification_marker_match",
             "at",
             "sent_at",

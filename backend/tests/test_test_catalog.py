@@ -39,8 +39,8 @@ def test_catalog_categories_have_unique_ids_and_explicit_coverage():
 def test_catalog_templates_match_execution_whitelist_without_enabling_planned_tests():
     data = catalog()
     templates = data["templates"]
-    assert {entry["id"] for entry in templates} == {"baseline", "role_compare", "both", "injection_errors", "xss_passive", "csrf_passive", "ssrf_passive", "xxe_passive", "file_passive", "deserialization_passive", "auth_session_passive", "disclosure_passive", "configuration_passive", "crypto_passive", "supply_chain_passive", "business_logic_review", "other_web_passive", "race_condition_review", "memory_safety_passive", "dos_passive", "cors_verify", "access_verify"}
-    assert len(templates) == 22
+    assert {entry["id"] for entry in templates} == {"baseline", "role_compare", "both", "injection_errors", "xss_passive", "csrf_passive", "ssrf_passive", "xxe_passive", "file_passive", "deserialization_passive", "auth_session_passive", "disclosure_passive", "configuration_passive", "crypto_passive", "supply_chain_passive", "business_logic_review", "other_web_passive", "race_condition_review", "memory_safety_passive", "dos_passive", "cors_verify", "access_verify", "sql_error_verify", "xss_reflection_verify", "redirect_verify"}
+    assert len(templates) == 25
     whitelist = JobInput.model_json_schema()["properties"]["endpoint_test_types"][
         "additionalProperties"
     ]["enum"]

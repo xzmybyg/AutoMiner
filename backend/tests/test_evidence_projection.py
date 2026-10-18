@@ -66,4 +66,7 @@ def test_catalog_requires_local_session_and_does_not_enable_planned_tests():
         "dos_passive",
         "cors_verify",
         "access_verify",
+        "sql_error_verify",
+        "xss_reflection_verify",
+        "redirect_verify",
     }

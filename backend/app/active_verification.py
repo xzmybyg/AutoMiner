@@ -8,6 +8,8 @@ from .policy import Denied
 
 
 def validate_rules(body, endpoints):
+    from .input_verification import MODES, validate
+    validate(body, endpoints)
     if len(set(body.endpoint_ids)) != len(body.endpoint_ids) or len(set(body.account_ids)) != len(body.account_ids):
         raise Denied("接口与账号不可重复绑定")
     rules = body.model_dump().get("verification_rules", {})
@@ -26,8 +28,8 @@ def validate_rules(body, endpoints):
         if endpoints[ident].get("executable") is False:
             raise Denied("该接口不可执行")
         mode = body.endpoint_test_types.get(ident, "both")
-        minimum += 3 if mode == "cors_verify" else 2 if mode == "access_verify" else 1 + (len(body.account_ids) if mode in ("both", "role_compare") else 0)
-    if any(mode in ("cors_verify", "access_verify") for mode in body.endpoint_test_types.values()) and body.request_budget < minimum:
+        minimum += 3 if mode == "cors_verify" or mode in MODES else 2 if mode == "access_verify" else 1 + (len(body.account_ids) if mode in ("both", "role_compare") else 0)
+    if any(mode in ("cors_verify", "access_verify") or mode in MODES for mode in body.endpoint_test_types.values()) and body.request_budget < minimum:
         raise Denied("请求预算不足以完成固定检查组")
 
 
