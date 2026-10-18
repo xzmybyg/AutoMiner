@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./task-detail.css";
+import TaskMonitor from "./TaskMonitor";
 
 type Props = {
   state: Record<string, any[]>;
@@ -67,6 +68,11 @@ const labels: Record<string, string> = {
   request_dispatched: "请求已发送",
   request_finished: "请求处理结束",
   check_completed: "检查结果已记录",
+  monitor_enabled: "任务事件监测已开启",
+  monitor_disabled: "任务事件监测已关闭",
+  monitor_observed: "任务事件解读已保存",
+  watching: "继续观察",
+  finished: "监测结束",
 };
 const label = (value: string) => labels[value] || value;
 const time = (value?: number) =>
@@ -468,6 +474,7 @@ export function TaskManager({
             <span>待确认线索 <strong>{detail.findings.filter((f:any)=>f.status!=="verified"&&f.status!=="false_positive").length}</strong></span>
           </div>}
           {detail.job.error && <p role="alert">停止原因：{detail.job.error}</p>}
+          <TaskMonitor key={selected} jobId={selected} models={state.model || []} api={api} />
           {detail.job.is_run && <details className="task-endpoint">
             <summary>查看检测步骤明细（{detail.steps?.length || 0}）</summary>
             {(detail.steps || []).map((step: any) => <p key={step.id}>

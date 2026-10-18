@@ -163,3 +163,19 @@
 .verification-criteria { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; border: 1px solid var(--line); border-radius: 10px; }
 .auto-template-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 20px; margin-block: 16px; }
 .auto-round-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 16px; }
+.task-monitor {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin: 24px 0;
+}
+.task-monitor-heading, .task-monitor-settings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.task-monitor-heading { justify-content: space-between; }
+.task-monitor-heading h3 { margin: 0; }
+.task-monitor-settings label { flex: 1 1 240px; }
+.task-monitor article { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }

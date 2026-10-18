@@ -40,7 +40,16 @@ async def lifespan(app):
         from .auto_scan import recover
 
         recover()
-    yield
+    observer = None
+    if ROLE == "api":
+        from .task_monitor import start
+        observer = start()
+    try:
+        yield
+    finally:
+        if observer:
+            observer[0].set()
+            observer[1].join(timeout=1)
 
 
 app = FastAPI(title="AutoMiner", version="0.1.0", lifespan=lifespan)
@@ -781,7 +790,12 @@ def model_call(body: dict):
     price = float(provider_settings()["MODEL_MAX_USD_PER_MILLION_TOKENS"])
     with Session() as s:
         model = get(s, body["model_id"], "model")
-    if body.get("planning_mode") == "read_only_round":
+    if body.get("planning_mode") == "task_monitor":
+        instruction = ('Return only JSON: {"summary":"Chinese explanation of task progress, anomalies and suggested manual next step, max 800 characters"}. '
+                       'You are a read-only event observer. You have no tools and cannot change, stop or start tasks. '
+                       'Use only the supplied status and event metadata. Do not claim a verified vulnerability. '
+                       'Do not invent request contents, evidence, endpoints or causes. Distinguish reserved from sent requests. ')
+    elif body.get("planning_mode") == "read_only_round":
         from .auto_scan import template_costs
         context = body["context"]
         if not context.get("allowed_test_types") or any(t not in template_costs() for t in context["allowed_test_types"]):
@@ -819,6 +833,8 @@ app.include_router(auto_scan_router)
 app.include_router(scan_run_router)
 from .account_management import router as account_router
 app.include_router(account_router)
+from .task_monitor import router as monitor_router
+app.include_router(monitor_router)
 
 static_dir = os.getenv("FRONTEND_DIR", "/frontend")
 if ROLE == "api" and os.path.isdir(static_dir):
