@@ -835,6 +835,10 @@ from .account_management import router as account_router
 app.include_router(account_router)
 from .task_monitor import router as monitor_router
 app.include_router(monitor_router)
+from .offline_review import router as offline_review_router
+app.include_router(offline_review_router)
+from .submission_report import router as submission_router
+app.include_router(submission_router)
 
 static_dir = os.getenv("FRONTEND_DIR", "/frontend")
 if ROLE == "api" and os.path.isdir(static_dir):

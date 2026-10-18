@@ -153,5 +153,5 @@ def job_detail(job_id: str):
             "findings": findings,
             "job_checks": [c for c in all_of(s, "check") if c.get("job_id") in member_ids],
             "logs": sorted(logs, key=lambda a: a.get("at") or 0),
-            "coverage_note": "仅展示已持久化的检查结果；历史证据没有检查明细时，不推断已检查或已通过。",
+            "coverage_note": "本任务为离线材料审查，未发送目标请求；覆盖范围见专项审查结果。" if job.get("offline_review") else "仅展示已持久化的检查结果；历史证据没有检查明细时，不推断已检查或已通过。",
         }

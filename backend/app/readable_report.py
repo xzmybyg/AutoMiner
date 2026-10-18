@@ -65,6 +65,7 @@ def summary(s, target_id, job_id=None):
                     truncated_responses=sum(bool(e.get('truncated') or e.get('http_exchange', {}).get('response', {}).get('truncated')) for e in complete)),
         check_states=dict(Counter(c.get('status', 'unknown') for e in evidence for c in e.get('checks', []))),
         verification_states=dict(Counter(v.get('status', 'unknown') for v in verifications)),
+        offline_reviews=[j['offline_review'] for j in jobs if j.get('offline_review')],
         advice=advice, findings=records, limitations=LIMITATIONS,
         next_steps=['先让维护人员复核线索与关联证据，再按网站实际情况加固。',
                     '修改后复测防护设置，并检查文章、图片、登录等正常功能。',
@@ -83,6 +84,11 @@ def export(s, target_id, fmt, job_id=None):
         lines += [f"### {item['title']}", item['explanation'], item['action'], '配置线索不是可利用漏洞证明。', '']
     if not data['advice']:
         lines.append('当前没有可自动解释的配置命中；历史记录缺少检查项时不能推断通过。')
+    for review in data.get('offline_reviews', []):
+        lines += ['', '## 离线专项审查覆盖', review['limitations']]
+        for c in review['coverage']:
+            state = {'lead':'有待核实线索', 'reviewed':'已审查，未命中有限规则', 'not_run':'未提供所需材料'}[c['status']]
+            lines.append(f"- {c['name']}：{state}，{c['count']} 条线索。")
     lines += ['', '## 发现记录（保留人工确认状态）']
     status = {'verified':'人工已标记确认，请复核证据', 'pending':'待确认', 'lead':'线索'}
     lines += [f"- {f['title']}：{status.get(f['status'], '历史状态待核对')}；关联证据：{', '.join(f['evidence_ids']) or '本范围无关联证据'}" for f in data['findings']]

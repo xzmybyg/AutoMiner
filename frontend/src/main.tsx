@@ -9,6 +9,8 @@ import { TaskManager } from "./TaskManager";
 import EndpointWorkspace from "./EndpointWorkspace";
 import AccountManager from "./AccountManager";
 import GuidedCheck from "./GuidedCheck";
+import OfflineReview from "./OfflineReview";
+import SubmissionReport from "./SubmissionReport";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import ReadableReport from "./ReadableReport";
 
@@ -155,7 +157,7 @@ function App() {
     setPreview("");
   }, [tab]);
   const [reportJob, setReportJob] = useState<string | null>(null);
-  const [reportView, setReportView] = useState<"easy" | "technical">("easy");
+  const [reportView, setReportView] = useState<"easy" | "technical" | "submission">("easy");
   const reportTask = [...state.job, ...state.scan_run, ...state.auto_scan].find((j) => j.id === reportJob);
   const reportTargetId = reportTask?.target_id || selected;
   const reportTarget = state.target.find((t) => t.id === reportTargetId);
@@ -411,6 +413,7 @@ function App() {
         )}
         {tab === "targets" && appsView === "accounts" && target && <section className="panel"><AccountManager target={target} accounts={state.account.filter(a=>a.target_id===selected)} api={api} run={run} busy={busy} onTask={id=>{setFocusJob(id);setTaskView("tasks");setTaskVisit(v=>v+1);setTab("jobs");}}/><div className="actions"><button className="primary" onClick={()=>setTab("testing")}>检查此应用</button></div></section>}
         {tab === "testing" && <GuidedCheck key={selected} target={target} state={state} api={api} run={run} busy={busy} onManage={()=>{setAppsView("accounts");setTab("targets");}} onAdvanced={()=>setAdvancedChecks(true)} onCreated={id=>{setFocusJob(id);setTaskView("tasks");setTab("jobs");}}/>}
+        {tab === "testing" && <details className="disclosure"><summary>离线专项审查：源码、弱口令、日志与文件完整性</summary><OfflineReview key={selected} target={target} api={api} onCreated={id=>{setFocusJob(id);setTaskView("tasks");setTab("jobs");}} /></details>}
         {tab === "testing" && <details className="disclosure" open={advancedChecks} onToggle={e=>setAdvancedChecks(e.currentTarget.open)}><summary>高级：接口发现、导入与自定义检测</summary>
           <EndpointWorkspace
             key={selected || "none"}
@@ -626,11 +629,11 @@ function App() {
                     </>
                   )}
                   <p className="muted">
-                    {reportView === "easy" ? "易懂版解释现有线索、处理建议和检查局限；技术版保留审核与证据详情。" : "技术版正式漏洞导出仅包含人工确认且有关联证据的发现，任务报告另附执行摘要。"}请先选择目标。
+                    {reportView === "easy" ? "易懂版解释现有线索、处理建议和检查局限；技术版保留审核与证据详情。" : reportView === "submission" ? "按单条发现整理平台提交草稿；在下方保存和导出，未确认记录保留待验证提示。" : "技术版正式漏洞导出仅包含人工确认且有关联证据的发现，任务报告另附执行摘要。"}
                   </p>
                 </div>
                 <div className="actions">
-                  {["md", "html", "zip"].map((f) => (
+                  {reportView !== "submission" && ["md", "html", "zip"].map((f) => (
                     <button
                       key={f}
                       disabled={busy || !reportTarget}
@@ -645,8 +648,10 @@ function App() {
             <div className="section-tabs report-view-switch" role="group" aria-label="报告阅读方式">
               <button type="button" className={reportView === "easy" ? "active" : ""} aria-pressed={reportView === "easy"} onClick={() => setReportView("easy")}>易懂版</button>
               <button type="button" className={reportView === "technical" ? "active" : ""} aria-pressed={reportView === "technical"} onClick={() => setReportView("technical")}>技术版</button>
+              <button type="button" className={reportView === "submission" ? "active" : ""} aria-pressed={reportView === "submission"} onClick={() => setReportView("submission")}>平台提交版</button>
             </div>
             {reportView === "easy" && (reportTarget ? <ReadableReport targetId={reportTargetId} jobId={reportJob} token={token} /> : <section className="empty">请先选择目标，再查看易懂版报告。</section>)}
+            {reportView === "submission" && <SubmissionReport findings={visibleFindings} api={api} token={token} />}
             {reportView === "technical" && visibleFindings.map((f) => (
               <details className="panel finding-card" key={f.id}>
                 <summary>

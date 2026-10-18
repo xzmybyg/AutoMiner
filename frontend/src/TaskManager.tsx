@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./task-detail.css";
 import TaskMonitor from "./TaskMonitor";
+import { OfflineResults } from "./OfflineReview";
 
 type Props = {
   state: Record<string, any[]>;
@@ -71,6 +72,7 @@ const labels: Record<string, string> = {
   monitor_enabled: "任务事件监测已开启",
   monitor_disabled: "任务事件监测已关闭",
   monitor_observed: "任务事件解读已保存",
+  offline_review_completed: "离线专项审查完成",
   watching: "继续观察",
   finished: "监测结束",
 };
@@ -474,6 +476,7 @@ export function TaskManager({
             <span>待确认线索 <strong>{detail.findings.filter((f:any)=>f.status!=="verified"&&f.status!=="false_positive").length}</strong></span>
           </div>}
           {detail.job.error && <p role="alert">停止原因：{detail.job.error}</p>}
+          {detail.job.offline_review && <details className="disclosure"><summary>专项审查结果与 13 类覆盖情况（{detail.job.offline_review.items.length} 条线索）</summary><OfflineResults result={detail.job.offline_review} /></details>}
           <TaskMonitor key={selected} jobId={selected} models={state.model || []} api={api} />
           {detail.job.is_run && <details className="task-endpoint">
             <summary>查看检测步骤明细（{detail.steps?.length || 0}）</summary>

@@ -203,6 +203,16 @@ def check(runtime):
                 response.json()["has_api_key"]
                 and "encrypted_key" not in response.json()
             )
+            offline = client.post(f"/api/targets/{target['id']}/offline-reviews", json={"materials_owned": True, "passwords": ["admin123"]})
+            assert offline.status_code == 200, offline.text
+            offline_detail = client.get(f"/api/jobs/{offline.json()['job_id']}").json()
+            assert offline_detail["coverage"]["sent_requests"] == 0
+            finding_id = offline_detail["findings"][0]["id"]
+            draft = client.get(f"/api/findings/{finding_id}/submission-draft").json()["fields"]
+            draft.update(vendor="Synthetic vendor", subtype="弱口令")
+            assert client.put(f"/api/findings/{finding_id}/submission-draft", json=draft).status_code == 200
+            assert "平台提交草稿" in client.get(f"/api/findings/{finding_id}/submission-export?format=html").text
+            assert counts == {"proof": 2, "test": 3}, "离线功能不得发出目标请求"
             return {
                 "ok": True,
                 "roles": ["api", "gateway", "model", "worker"],
@@ -216,6 +226,8 @@ def check(runtime):
                 "task_details": True,
                 "interface_discovery": True,
                 "http_evidence": True,
+                "offline_review": True,
+                "submission_draft": True,
             }
     finally:
         server.shutdown()
@@ -235,10 +247,11 @@ def check_persistence(runtime):
         trust_env=False,
     ) as client:
         state = client.get("/api/state").json()
-        assert len(state["target"]) == 1 and len(state["job"]) == 1
+        assert len(state["target"]) == 1 and len(state["job"]) == 2
         assert len(state["model"]) == 1 and state["model"][0]["has_api_key"]
         assert "encrypted_key" not in state["model"][0]
-        saved_detail = client.get(f"/api/jobs/{state['job'][0]['id']}").json()
+        online_job = next(j for j in state["job"] if not j.get("offline_review"))
+        saved_detail = client.get(f"/api/jobs/{online_job['id']}").json()
         assert any(
             "synthetic-only"
             in e.get("http_exchange", {}).get("response", {}).get("body", "")
@@ -248,6 +261,10 @@ def check_persistence(runtime):
             client.get("/api/model-settings").json()["MODEL_CLOUD_BASE_URLS"]
             == "https://fixture.example/v1"
         )
+        offline = next(j for j in state["job"] if j.get("offline_review"))
+        offline_detail = client.get(f"/api/jobs/{offline['id']}").json()
+        finding_id = offline_detail["findings"][0]["id"]
+        assert client.get(f"/api/findings/{finding_id}/submission-draft").json()["fields"]["vendor"] == "Synthetic vendor"
     with Session() as session:
         assert (
             decrypt(all_of(session, "model")[0]["encrypted_key"])

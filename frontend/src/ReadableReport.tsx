@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { OfflineResults } from "./OfflineReview";
 
 type Props = {
   targetId: string;
@@ -52,6 +53,7 @@ export default function ReadableReport({ targetId, jobId, token }: Props) {
     </div>
     <p className="muted">这些数字是检查规模，不是安全分数或漏洞总数。请求结束不代表正文完整；{counts.truncated_responses} 条响应存在内容截断。</p>
     <h3>先看需要处理什么</h3>
+    {(data.offline_reviews || []).map((review: any, index: number) => <details className="report-explanation" key={index}><summary>离线专项审查：覆盖范围与线索</summary><OfflineResults result={review} /></details>)}
     {data.advice.length === 0 && <p>当前没有可自动解释的配置命中。历史记录缺少检查明细时，不推断检查通过。</p>}
     {data.advice.map((item: any) => <details className="report-explanation" key={item.id}>
       <summary>{item.title}<span className="muted"> · 展开说明</span></summary>
